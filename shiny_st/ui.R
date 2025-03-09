@@ -30,8 +30,8 @@ vbs <- list(
     title = "# Genes Available",
     value = "500",
     showcase = bs_icon("bar-chart"),
-    theme = "purple",
-    p("More to be added")
+    theme = "purple"#,
+    #p("More to be added")
   ),
   value_box(
     title = "# Visium Spots (display)",
