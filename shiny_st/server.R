@@ -26,7 +26,10 @@ server <- function(input, output, session){
                      input$feature_show,
                      paste(sprintf("'%s'", input$age_show), collapse = ","))
     print(query)
-    dbGetQuery(con, query)
+    df <- dbGetQuery(con, query)
+    # Set Age factor order
+    df$Age <- factor(df$Age, levels = c('E165', 'P0', 'W3', 'W12', 'W52', 'W92'))
+    return(df)
   })
   
   ## vals will contain all plot and table grobs
@@ -65,33 +68,24 @@ server <- function(input, output, session){
     p_vln
   })
   
-  # # 4 Download handler
-  # output$pdf_output <- downloadHandler(
-  #   filename = function() {
-  #     paste("kidney_plots_", Sys.Date(), ".pdf", sep = "")
-  #   },
-  #   content = function(file) {
-  #     # Create a PDF file
-  #     pdf(file, width = 19, height = 18)
-  #     
-  #     # Print plots that exist in vals
-  #     plot_list <- list()
-  #     if (!is.null(vals$p1)) plot_list <- c(plot_list, list(vals$p1))
-  #     if (!is.null(vals$p2)) plot_list <- c(plot_list, list(vals$p2))
-  #     if (!is.null(vals$p3)) plot_list <- c(plot_list, list(vals$p3))
-  #     
-  #     if (length(plot_list) > 0) {
-  #       print(wrap_plots(plot_list, ncol = 1))
-  #     } else {
-  #       plot.new()
-  #       text(0.5, 0.5, "No plots available to export", cex = 2)
-  #     }
-  #     
-  #     dev.off()
-  #   },
-  #   contentType = "application/pdf"
-  # )
-  # 
+  # 4 Download handler
+  output$pdf_output <- downloadHandler(
+    filename = function() {
+      paste("kidney_plots_", Sys.Date(), ".pdf", sep = "")
+    },
+    content = function(file) {
+      withProgress(message = "Generating PDF", value = 0, {
+        pdf(file, width = 12, height = 18)
+        if (!is.null(vals$p1)) print(vals$p1)
+        if (!is.null(vals$p2)) print(vals$p2)
+        if (!is.null(vals$p3)) print(vals$p3)
+        dev.off()
+      })
+    },
+    contentType = "application/pdf"
+  )
+  
+  
   # # message for downloadPDF
   # observeEvent(input$pdf_output, {
   #   # Add a delay to ensure plots are rendered
@@ -99,5 +93,12 @@ server <- function(input, output, session){
   #   session$sendCustomMessage("downloadPDF", list(date = Sys.Date()))
   # })
   
+  # Observe to keep alive
+  observe({
+    input$keepAlive
+    # Do nothing, just observe to keep the connection alive
+  })
+  
+  # Close SQL session
   session$onSessionEnded(function() { dbDisconnect(con) })
 }

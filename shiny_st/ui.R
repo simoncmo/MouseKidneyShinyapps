@@ -3,6 +3,7 @@ library(shiny)
 library(ggplot2)
 library(plyr)
 library(dplyr)
+library(bslib)
 
 
 ###### Parameters
@@ -23,78 +24,156 @@ ident_options = c('seurat_clusters','RCTD_cell_name') # To be replaced
 feature_options = read_tsv('table/feature_options.tsv')$gene
 
 
-# UI
-ui <- fluidPage(
-  titlePanel("Mouse Kidney Sex Dimorphism - Visium Data"),
-
-  # Add JS libraries - for PDF output
-  tags$head(
-    tags$script(src = "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"),
-    tags$script(src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js")
+# UI with bslib
+ui <- page_sidebar(
+  # Theme customization
+  theme = bs_theme(
+    preset = "flatly",
+    #version = 5,
+    #bootswatch = "flatly",  # A clean, professional theme (try "cosmo", "flatly", etc.)
+    #primary = "#6BAED0",      # Darker blue for buttons/links
+    #secondary = "#ECF0F1",    # Light gray for contrast
+    #font_scale = 1.1          # Slightly larger text
   ),
   
-  # Existing UI
-  fluidRow(
-    column(3,
-           # options
-      selectInput(inputId="dim_show",label=h3("Identity to Show"),choices = ident_options, selected = "RCTD_cell_name",multiple = F),
-      selectInput(inputId="feature_show",label=h3("Gene to Show"),choices = feature_options, selected = "Lrp2",multiple = F),
-      selectInput(inputId='vln_cells', label=h3('Cell groups to show on Violin Plot'), choices = cell_options, selected = 'epithelial_cells', multiple = F),
-      sliderInput(inputId = "spot_size",
-                  label = h3("Spot Size"),
-                  min = 0.1,
-                  max = 3,
-                  value = 0.8),
-      
-      # Age 
-      checkboxGroupInput(inputId = "age_show", 
-                         label = h3("Age to Show"), 
-                         #choices  = c('E165','P0','W1','W2','W3','W12','W52','W92','W113') %>% setNames(.,.) %>% as.list,
-                         #selected = c('E165','P0','W1','W2','W3','W12','W52','W92','W113') ),
-                         choices  = c('E165','P0','W3','W12','W52','W92') %>% setNames(.,.) %>% as.list,
-                         selected = c('E165','P0','W3','W12','W52','W92') ),
-      # download
-      #actionButton("pdf_output", "Download PDF")
+  # Title
+  title = card(
+    card_header("Mouse Kidney Sex Dimorphism - Visium Data", class = "text-center"),
+    full_screen = FALSE
+  ),
+  
+  # Sidebar layout
+  sidebar = sidebar(
+    width = 350,  # Wider sidebar for readability
+    open = "open", # Starts open, can toggle
+    bg = "#F8F9FA",  # Light gray background
+    
+    # Identity and Gene Selection
+    card(
+      card_header("Plot Options", class = "bg-primary text-white"),
+      selectInput(
+        inputId = "dim_show",
+        label = "Identity to Show",
+        choices = ident_options,
+        selected = "RCTD_cell_name",
+        multiple = FALSE
+      ) %>% 
+        tooltip("Select the identity type to display on the spatial plot") %>% 
+        tagAppendAttributes(class = "form-select-sm"),  # Smaller dropdown
+      selectInput(
+        inputId = "feature_show",
+        label = "Gene to Show",
+        choices = feature_options,
+        selected = "Lrp2",
+        multiple = FALSE
+      ) %>% 
+        tooltip("Select the features to display on the spatial plot") %>% 
+        tagAppendAttributes(class = "form-select-sm"),
+      selectInput(
+        inputId = "vln_cells",
+        label = "Cell Groups for Violin Plot",
+        choices = cell_options,
+        selected = "epithelial_cells",
+        multiple = FALSE
+      ) %>% 
+        tooltip("Select the features to plot on violin plot") %>% 
+        tagAppendAttributes(class = "form-select-sm")
     ),
-    column(9,
-          # Wrap in dev to allow Javascript pdf output
-           div(id = "plotContainer",
-               plotOutput("identPlot"),
-               plotOutput("featurePlot"),
-               plotOutput("VlnPlot")
-           )
+    
+    # Spot Size Slider
+    card(
+      card_header("Spot Size", class = "bg-primary text-white"),
+      sliderInput(
+        inputId = "spot_size",
+        label = NULL,  # Label in header
+        min = 0.1,
+        max = 3,
+        value = 0.8,
+        step = 0.1
+      )
+    ),
+    
+    # Age Selection
+    card(
+      card_header("Age Groups", class = "bg-primary text-white"),
+      checkboxGroupInput(
+        inputId = "age_show",
+        label = NULL,  # Label in header
+        choices = c('E165', 'P0', 'W3', 'W12', 'W52', 'W92') %>% 
+          setNames(., .) %>% as.list,
+        selected = c('E165', 'P0', 'W3', 'W12', 'W52', 'W92'),
+        inline = TRUE  # Horizontal layout
+      )
+    ),
+    
+    # Download Button
+    actionButton(
+      inputId = "pdf_output",
+      label = "Download PDF",
+      class = "btn-primary btn-block mt-2"
+    )
+  ),
+  
+  # Main content
+  # Adjust height
+  tags$head(
+    tags$style(HTML("
+      .plot-container { min-height: 450px; }
+    "))
+  ),
+    
+  layout_columns(
+    col_widths = c(12, 12, 12),  # Stack plots vertically
+    card(
+      full_screen = TRUE,
+      card_header("Identity Plot"),
+      plotOutput("identPlot")
+    ),
+    card(
+      full_screen = TRUE,
+      card_header("Feature Plot"),
+      plotOutput("featurePlot")
+    ),
+    card(
+      full_screen = FALSE,
+      card_header("Violin Plot"),
+      div(class = "plot-container", plotOutput("VlnPlot"))
+    )
   ),
   
   # Add custom JS for PDF download
-  # tags$script(HTML("
-  #   console.log('JavaScript loaded');
-  #   Shiny.addCustomMessageHandler('downloadPDF', function(message) {
-  #     console.log('Download PDF triggered with date: ' + message.date);
-  #     const { jsPDF } = window.jspdf;
-  #     if (!jsPDF) {
-  #       console.error('jsPDF not loaded');
-  #       return;
-  #     }
-  #     const plotContainer = document.querySelector('#plotContainer');
-  #     if (!plotContainer) {
-  #       console.error('Plot container not found');
-  #       return;
-  #     }
-  #     html2canvas(plotContainer).then(canvas => {
-  #       console.log('Canvas generated, width: ' + canvas.width + ', height: ' + canvas.height);
-  #       const imgData = canvas.toDataURL('image/png');
-  #       const pdf = new jsPDF('p', 'mm', 'a4');
-  #       const width = pdf.internal.pageSize.getWidth();
-  #       const height = pdf.internal.pageSize.getHeight();
-  #       pdf.addImage(imgData, 'PNG', 0, 0, width, height);
-  #       pdf.save('kidney_plots_' + message.date + '.pdf');
-  #       console.log('PDF saved');
-  #     }).catch(error => {
-  #       console.error('html2canvas error: ', error);
-  #     });
-  #   });
-  # "))
-
- )
+  # sidebar = sidebar(
+  #   width = 350,
+  #   bg = "#F8F9FA",
+  #   # ... other cards ...
+  #   card(
+  #     card_header("Export", class = "bg-primary text-white"),
+  #     downloadButton(
+  #       outputId = "pdf_output",
+  #       label = "Download PDF",
+  #       class = "btn-primary btn-block"
+  #     )
+  #   )
+  # ),
+  
+  # Add timout preventor
+  tags$head(
+    tags$script(HTML("
+    var socket_timeout_interval;
+    var n = 0;
+    $(document).on('shiny:connected', function(event) {
+      socket_timeout_interval = setInterval(function(){
+        Shiny.setInputValue('keepAlive', n++);
+      }, 50000); // 50 seconds
+    });
+    $(document).on('shiny:disconnected', function(event) {
+      clearInterval(socket_timeout_interval);
+    });
+  "))
+  )
+  
 )
+
+  
+  
 
